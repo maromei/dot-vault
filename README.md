@@ -1,0 +1,38 @@
+# Reference
+
+## Config Directory
+
+```
+└ ~/.config/dot-vault
+  └ modules
+    └ <MODULE_NAME>
+      ├ module_config.toml
+      └ install_scripts
+        ├ `<ENVIRONMENT_1>.sh`
+        └ `<ENVIRONMENT_2>.ps1`
+```
+
+## Modules
+
+- Some tool or collection of tools
+- contains:
+    - install_script
+
+### Config
+
+- Each module might contain a `module_config.toml`
+
+```toml
+[dot-vault-module]
+
+```
+
+### Install
+
+```bash
+dot-vault module install <ENVIRONMENT>
+```
+
+- `<ENVIRONMENT>` will match to the start of the script files.
+  The file endings may be omitted.
+- if only one install script exists, `<ENVIRONMENT>` may be omitted.
