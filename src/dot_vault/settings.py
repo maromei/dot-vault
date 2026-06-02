@@ -70,7 +70,7 @@ def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
     if not_exist_ok or config_path.is_file():
         return config_path.resolve()
 
-    raise FileNotFoundError("The path to the module_config.toml could not be foud.")
+    raise FileNotFoundError("The path to the module_config.toml could not be found.")
 
 
 def get_module_install_script(module_name: str, install_script: str | None) -> Path:
