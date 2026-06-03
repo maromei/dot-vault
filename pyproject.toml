@@ -9,5 +9,14 @@ dependencies = [
     "pydantic>=2.13.4",
 ]
 
+[project.scripts]
+dot-vault = "dot_vault.__main__:app"
+
 [tool.uv]
 package=true
+
+[tool.basedpyright]
+reportImplicitStringConcatenation = false
+extraPaths = ["src"]
+venvPath = "."
+venv = ".venv"
