@@ -1,6 +1,15 @@
+from __future__ import annotations
+
+import os
 import tomllib
+import platform
+import subprocess
+from typing import Any
 from pathlib import Path
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
+
+from dot_vault.errors import InstallFailed
 
 
 def get_dot_vault_dir() -> Path:
@@ -13,10 +22,36 @@ def get_dot_vault_dir() -> Path:
     Returns:
         Path to the dot-vault directory.
     """
-    dotvault_dir = Path("~/.config/dot-vault/").resolve()
+
+    dotvault_dir = Path.home() / ".config/dot-vault/"
+    dotvault_dir = dotvault_dir.resolve()
+
     if not dotvault_dir.is_dir():
-        raise FileNotFoundError("The dot-vault directory does not exist.")
+        raise FileNotFoundError(
+            f"The dot-vault directory does not exist. '{dotvault_dir.as_posix()}'"
+        )
     return dotvault_dir
+
+
+def get_default_shell() -> str:
+    """Get the default shell of the user.
+
+    On Windows, it returns the value of the COMSPEC environment variable.
+    On POSIX systems, it tries to get the login shell from the password database,
+    falling back to the SHELL environment variable or /bin/sh.
+
+    Returns:
+        The path to the default shell.
+    """
+    if platform.system() == "Windows":
+        return os.environ.get("COMSPEC", "cmd.exe")
+
+    try:
+        import pwd
+
+        return pwd.getpwuid(os.getuid()).pw_shell
+    except ImportError, AttributeError, KeyError:
+        return os.environ.get("SHELL", "/bin/sh")
 
 
 def get_module_dir(name: str | None = None) -> Path:
@@ -114,17 +149,51 @@ def get_module_install_script(module_name: str, install_script: str | None) -> P
     return matching_files[0]
 
 
+def get_module(name: str) -> Module:
+    return Module(name)
+
+
 class Module:
+    """Representation of a module with all its content and functions."""
+
     name: str
     path: Path
     config: ModuleConfig
 
     def __init__(self, name: str):
-        module_dir: Path = get_module_dir() / name
+        module_dir: Path = get_module_dir(name)
+        module_config_path: Path = get_module_config_path(name, not_exist_ok=True)
+
+        if module_config_path.is_file():
+            with open(module_config_path, "rb") as f:
+                module_config_dict: dict[str, Any] = tomllib.load(f)  # pyright: ignore[reportExplicitAny]
+            self.config = ModuleConfig.model_validate(module_config_dict)
+        else:
+            self.config = ModuleConfig()
 
         self.name = name
         self.path = module_dir
 
+    def install(self, install_script: str | None = None):
+
+        # TODO: check for cyclic dependencies
+        for dependency in self.config.dependencies:
+            module: Module = get_module(dependency)
+            module.install(install_script=install_script)
+
+        install_script_path: Path = get_module_install_script(self.name, install_script)
+        path_str: str = install_script_path.as_posix()
+        completed_process = subprocess.run(
+            [path_str],
+            shell=True,
+            executable=self.config.shell,
+        )
+        try:
+            completed_process.check_returncode()
+        except subprocess.CalledProcessError as e:
+            raise InstallFailed(f"Unable to install the module '{self.name}'") from e
+
 
 class ModuleConfig(BaseModel):
     dependencies: list[str] = []  # Mutable defaults is a working feature in pydantic
+    shell: str = Field(default_factory=get_default_shell)

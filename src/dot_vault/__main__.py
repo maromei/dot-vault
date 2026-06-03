@@ -1,8 +1,6 @@
-from pathlib import Path
-
 import doctyper as typer
 
-from dot_vault.settings import get_module_install_script
+from dot_vault.settings import Module, get_module
 
 
 app = typer.Typer(help="Manage dot files and system setup.")
@@ -21,8 +19,8 @@ def modules_install(module: str, script: str | None = None):
             only contain one script, and that one is used.
     """
 
-    install_script: Path = get_module_install_script(module, script)
-    print(install_script)
+    module_obj: Module = get_module(name=module)
+    module_obj.install(install_script=script)
 
 
 if __name__ == "__main__":
