@@ -1,6 +1,6 @@
 import doctyper as typer
 
-from dot_vault.settings import Module, get_module
+from dot_vault.modules import Module, get_module
 
 
 app = typer.Typer(help="Manage dot files and system setup.")

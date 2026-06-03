@@ -1,86 +1,15 @@
 from __future__ import annotations
 
-import os
-import tomllib
-import platform
 import subprocess
-from typing import Any
+import tomllib
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from dot_vault.errors import InstallFailed
-
-
-def get_dot_vault_dir() -> Path:
-    """Get the directory containing the dot-vault config.
-
-    Currently only searches for `~/config/dot-vault/`.
-    Raises:
-        FileNotFoundError: If the directory does not exist.
-
-    Returns:
-        Path to the dot-vault directory.
-    """
-
-    dotvault_dir = Path.home() / ".config/dot-vault/"
-    dotvault_dir = dotvault_dir.resolve()
-
-    if not dotvault_dir.is_dir():
-        raise FileNotFoundError(
-            f"The dot-vault directory does not exist. '{dotvault_dir.as_posix()}'"
-        )
-    return dotvault_dir
-
-
-def get_default_shell() -> str:
-    """Get the default shell of the user.
-
-    On Windows, it returns the value of the COMSPEC environment variable.
-    On POSIX systems, it tries to get the login shell from the password database,
-    falling back to the SHELL environment variable or /bin/sh.
-
-    Returns:
-        The path to the default shell.
-    """
-    if platform.system() == "Windows":
-        return os.environ.get("COMSPEC", "cmd.exe")
-
-    try:
-        import pwd
-
-        return pwd.getpwuid(os.getuid()).pw_shell
-    except ImportError, AttributeError, KeyError:
-        return os.environ.get("SHELL", "/bin/sh")
-
-
-def get_module_dir(name: str | None = None) -> Path:
-    """Get the directory containing the module config.
-
-    Currently only searches for `modules/` in the directory given by
-    :func:`get_dot_vault_dir`. If `name` is not `None`, the directory of the
-    specific module will be returned `modules/{name}/`.
-
-    Raises:
-        FileNotFoundError: If the directory does not exist.
-
-    Args:
-        name: Optional name to a specific module directory. Otherwise return
-            path to the general modules directory.
-
-    Returns:
-        Path to the module directory.
-    """
-
-    vault_dir: Path = get_dot_vault_dir()
-    module_dir: Path = vault_dir / "modules/"
-    if name is not None:
-        module_dir = module_dir / name
-    module_dir = module_dir.resolve()
-
-    if not module_dir.is_dir():
-        raise FileNotFoundError("Module directory does not exist.")
-    return module_dir
+from dot_vault.paths import get_module_dir
+from dot_vault.shell import get_default_shell
 
 
 def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
