@@ -20,11 +20,13 @@
 
 ### Config
 
-- Each module might contain a `module_config.toml`
+- Each module might contain a `module_config.toml`.
+- All fields are optional
 
 ```toml
 [dot-vault-module]
-
+dependencies = ["module_1", "module_2"]
+shell = "/bin/csh"  # defaults to whatever shell the user is currently running dot-vault from
 ```
 
 ### Install
