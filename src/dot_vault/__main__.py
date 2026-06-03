@@ -3,9 +3,9 @@ import doctyper as typer
 from dot_vault.modules import Module, get_module
 
 
-app = typer.Typer(help="Manage dot files and system setup.")
+app = typer.DocTyper(help="Manage dot files and system setup.")
 
-module_app = typer.Typer(help="Manage modules.")
+module_app = typer.DocTyper(help="Manage modules.")
 app.add_typer(module_app, name="module")
 
 
@@ -14,7 +14,7 @@ def modules_install(module: str, script: str | None = None):
     """Install a module.
 
     Args:
-        module_name: Name of the module.
+        module: Name of the module.
         script: Name of the install script to use. If not specified, it is assumed to
             only contain one script, and that one is used.
     """
