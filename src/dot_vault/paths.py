@@ -1,3 +1,10 @@
+"""Contains function retrieving the default or expected project dot-vault structure.
+
+F.e. eventhough a :mod:`dot_vault.modules` module exists, the :func:`get_module_dir`
+function is still found here, since it retrieves the path within the default
+structure.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
