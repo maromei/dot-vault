@@ -22,9 +22,10 @@
 
 - Each module might contain a `module_config.toml`.
 - All fields are optional
+- The top level category has to be either `[dot-vault.module]` or nothing
 
 ```toml
-[dot-vault-module]
+[dot-vault.module]
 dependencies = ["module_1", "module_2"]
 shell = "/bin/csh"  # defaults to whatever shell the user is currently running dot-vault from
 ```
