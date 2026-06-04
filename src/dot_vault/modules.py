@@ -5,7 +5,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator, ValidationError
 
 from dot_vault.errors import InstallFailed
 from dot_vault.paths import get_module_dir
@@ -124,5 +124,39 @@ class Module:
 
 
 class ModuleConfig(BaseModel):
+    """Pydantic Model for the module config"""
+
     dependencies: list[str] = []  # Mutable defaults is a working feature in pydantic
     shell: str = Field(default_factory=get_default_shell)
+
+    @model_validator(mode="before")
+    @classmethod
+    def unwrap_top_category(cls, data: Any) -> Any:  # pyright: ignore[reportExplicitAny, reportAny]
+        """Removes outer `[dot-vault.module]` category if present.
+
+        Ensures that the toml file to be parsed either has no top category, or
+        `[dot-vault.module]`.
+
+        Raises:
+            ValidationError: When the 'dot-vault' category is present without the
+                'module' subcategory.
+
+        Args:
+            data: object to validate
+
+        Returns:
+            Input object with the `[dot-vault.module]` category stripped.
+        """
+
+        if not isinstance(data, dict) or "dot-vault" not in data.keys():
+            return data  # pyright: ignore[reportUnknownVariableType]
+
+        data = data["dot-vault"]  # pyright: ignore[reportUnknownVariableType]
+        if not isinstance(data, dict) or "module" not in data.keys():
+            raise ValidationError(
+                "The config contains the 'dot-vault' category, "
+                "without the 'module' category. Either [dot-vault.module] needs "
+                "to be the top level category, or nothing at all."
+            )
+
+        return data["module"]  # pyright: ignore[reportUnknownVariableType]
