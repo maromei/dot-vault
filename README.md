@@ -39,3 +39,50 @@ dot-vault module install <ENVIRONMENT>
 - `<ENVIRONMENT>` will match to the start of the script files.
   The file endings may be omitted.
 - if only one install script exists, `<ENVIRONMENT>` may be omitted.
+
+# TODO
+
+## Flavor
+
+- each module can have flavors
+    - f.e. different themes for a terminal
+- flavors live in subdirectory `flavors` of module
+    - the `flavors` subdirectory essentially mirrors the general module directory
+- are simple scripts executed post, pre or instead of install
+    - how it behaves depends on the name
+    - `arch_pre.sh` runs before regular `arch.sh`
+    - `arch.sh` replaces regular `arch.sh`
+    - `arch_post.sh` runs after regular `arch.sh`
+
+```text
+└ ~/.config/dot-vault/
+  └ modules/
+    └ <MODULE_NAME>/
+      ├ module_config.toml
+      ├ install_scripts/
+      │ └ arch.sh
+      └ flavors/
+        └ theme_1/
+          └ install_scripts/
+            ├ arch_pre.sh
+            ├ arch.sh
+            └ arch_post.sh
+```
+
+- the flavor gets installed via the `--flavor` flag on
+  `dot-vault module install <MODULE_NAME> --flavor <FLAVOR_NAME>`
+- stuff like the `check_installed` scripts cannot be overridden since there
+  is no 'state'
+  - we do not know which flavor is installed
+
+## Check installed
+
+- have script to check whether something is installed
+- should also be able to provide a name, similar to the install_scripts (ie `arch.sh`)
+- should be used when installing dependencies
+
+## Check installed - flag force update
+
+- provide flag so modules, which are already installed, can be updated
+- only update modules **once**
+  - if module is present as multiple dependencies, do not re run them again
