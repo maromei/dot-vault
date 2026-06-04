@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator, ValidationError
+from pydantic import BaseModel, Field, model_validator, field_validator, ValidationError
 
 from dot_vault.errors import InstallFailed
 from dot_vault.paths import get_module_dir
@@ -128,6 +129,20 @@ class ModuleConfig(BaseModel):
 
     dependencies: list[str] = []  # Mutable defaults is a working feature in pydantic
     shell: str = Field(default_factory=get_default_shell)
+    description: str = ""
+
+    @field_validator("description", mode="after")
+    @classmethod
+    def clean_description(cls, value: str) -> str:
+        """Remove leading whitspace consistent through all lines."""
+
+        match: re.Match[str] | None = re.search(r"^\s*(?=\S)", value)
+        if match is not None:
+            string_to_replace = r"(^|\n)?" + match.group()
+            value = re.sub(string_to_replace, "\n", value)
+
+        value = value.strip(" \t\r\n")
+        return value
 
     @model_validator(mode="before")
     @classmethod
