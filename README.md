@@ -95,3 +95,7 @@ dot-vault module install <TARGET>
 - provide flag so modules, which are already installed, can be updated
 - only update modules **once**
   - if module is present as multiple dependencies, do not re run them again
+
+## Refactor: Move get_module_install_script to path module
+
+## Refactor: Make get_module_install_script use the new MoreThanOneFileFound exception
