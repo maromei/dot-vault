@@ -38,11 +38,11 @@ def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
     raise FileNotFoundError("The path to the module_config.toml could not be found.")
 
 
-def get_module_install_script(module_name: str, install_script: str | None) -> Path:
+def get_module_install_script(module_name: str, target: str | None) -> Path:
     """Get the path to the install script
 
     Searches the following of :func:`get_module_dir``{module_name}/install_scripts/`
-    for the `{install_script}*` file. If `install_script` is `None`, it is assumed to
+    for the `{target}*` file. If `target` is `None`, it is assumed to
     only contain one file whose path will be returned. An error will be raised if
     multiple files are found for the given pattern.
 
@@ -53,8 +53,8 @@ def get_module_install_script(module_name: str, install_script: str | None) -> P
 
     Args:
         module_name: The name of the module.
-        install_script: The name of the install script to use. The given string will
-            be matched to the beginning of the filename. Supports 'glob' syntax.
+        target: The name of the target script/environment to use. The given string
+            will be matched to the beginning of the filename. Supports 'glob' syntax.
 
     Returns:
         The path to the install script to use.
@@ -66,8 +66,8 @@ def get_module_install_script(module_name: str, install_script: str | None) -> P
         raise FileNotFoundError("Install Script directory does not exist.")
 
     pattern: str = "*"
-    if install_script is not None:
-        pattern = f"{install_script}*"
+    if target is not None:
+        pattern = f"{target}*"
 
     matching_files: list[Path] = list(install_script_dir.glob(pattern))
     if len(matching_files) == 0:
@@ -104,14 +104,14 @@ class Module:
         self.name = name
         self.path = module_dir
 
-    def install(self, install_script: str | None = None):
+    def install(self, target: str | None = None):
 
         # TODO: check for cyclic dependencies
         for dependency in self.config.dependencies:
             module: Module = get_module(dependency)
-            module.install(install_script=install_script)
+            module.install(target=target)
 
-        install_script_path: Path = get_module_install_script(self.name, install_script)
+        install_script_path: Path = get_module_install_script(self.name, target)
         path_str: str = install_script_path.as_posix()
         completed_process = subprocess.run(
             [path_str],

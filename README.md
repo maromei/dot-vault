@@ -8,8 +8,8 @@
     └ <MODULE_NAME>
       ├ module_config.toml
       └ install_scripts
-        ├ `<ENVIRONMENT_1>.sh`
-        └ `<ENVIRONMENT_2>.ps1`
+        ├ `<TARGET_1>.sh`
+        └ `<TARGET_2>.ps1`
 ```
 
 ## Modules
@@ -33,12 +33,12 @@ shell = "/bin/csh"  # defaults to whatever shell the user is currently running d
 ### Install
 
 ```bash
-dot-vault module install <ENVIRONMENT>
+dot-vault module install <TARGET>
 ```
 
-- `<ENVIRONMENT>` will match to the start of the script files.
+- `<TARGET>` will match to the start of the script files.
   The file endings may be omitted.
-- if only one install script exists, `<ENVIRONMENT>` may be omitted.
+- if only one install script exists, `<TARGET>` may be omitted.
 
 # TODO
 

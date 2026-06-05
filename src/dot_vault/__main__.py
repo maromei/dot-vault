@@ -16,17 +16,18 @@ app.add_typer(module_app, name="module")
 
 
 @module_app.command(name="install")
-def modules_install(module: str, script: str | None = None):
+def modules_install(module: str, target: str | None = None):
     """Install a module.
 
     Args:
         module: Name of the module.
-        script: Name of the install script to use. If not specified, it is assumed to
-            only contain one script, and that one is used.
+        target: Target environment (e.g., OS or machine name) to install for. If not
+            specified, it is assumed the module only contains one target script, and
+            that one is used.
     """
 
     module_obj: Module = get_module(name=module)
-    module_obj.install(install_script=script)
+    module_obj.install(target=target)
 
 
 @module_app.command(name="list")
