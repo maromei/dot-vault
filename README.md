@@ -81,6 +81,15 @@ dot-vault module install <ENVIRONMENT>
 - should also be able to provide a name, similar to the install_scripts (ie `arch.sh`)
 - should be used when installing dependencies
 
+### Interface for check
+
+- check gets called
+- environment variable `DOT_VAULT_RESULT_FILE` contains path to `TOML` file to which
+  results are written
+- script needs to write `installed = true` or `installed = false` to file
+  - generally any valid toml can be passed back to `dot-vault`
+  - can be expanded later on
+
 ## Check installed - flag force update
 
 - provide flag so modules, which are already installed, can be updated
