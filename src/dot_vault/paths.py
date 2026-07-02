@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dot_vault.errors import MoreThanOneFileFound
+from dot_vault.settings import EnvironmentSettings
 
 
 def get_dot_vault_dir() -> Path:
@@ -23,7 +24,7 @@ def get_dot_vault_dir() -> Path:
         Path to the dot-vault directory.
     """
 
-    dotvault_dir = Path.home() / ".config/dot-vault/"
+    dotvault_dir: Path = EnvironmentSettings.conf_dir
     dotvault_dir = dotvault_dir.resolve()
 
     if not dotvault_dir.is_dir():
