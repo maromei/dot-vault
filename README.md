@@ -105,3 +105,11 @@ dot-vault module install <TARGET>
 ## Refactor: Move get_module_install_script to path module
 
 ## Refactor: Make get_module_install_script use the new MoreThanOneFileFound exception
+
+# Dev environment
+
+- linting via `ruff`
+- typechecking via `basedpyright`
+- task runner using `just`
+- tests via `pytest`
+- all tools listed in dev-dependency section of the `pyproject.toml`
