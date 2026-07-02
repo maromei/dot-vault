@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import tomllib
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator, field_validator, ValidationError
 
-from dot_vault.errors import InstallFailed
-from dot_vault.paths import get_module_dir
+from dot_vault.errors import (
+    InstallFailed,
+    CheckInstalledFailed,
+    InvalidReturnFileFormat,
+)
+from dot_vault.paths import get_module_dir, get_check_installed_script
 from dot_vault.shell import get_default_shell
+from dot_vault.constants import RESULT_FILE_ENV_NAME
 
 
 def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
@@ -104,6 +111,57 @@ class Module:
         self.name = name
         self.path = module_dir
 
+    def check_installed(self, target: str | None) -> bool | None:
+        """Check if the module is installed.
+
+        Args:
+            target: target to check for. If `None`, assumes only a single script exists.
+
+        Returns:
+            If the module is installed, or `None` if no `check_installed` script exists.
+        """
+
+        script_path: Path | None = get_check_installed_script(
+            module_name=self.name, target=target
+        )
+        if script_path is None:
+            return None
+
+        script_path_str: str = script_path.as_posix()
+
+        fd, temp_file_path_str = tempfile.mkstemp(suffix=".toml")
+        os.close(fd)
+        temp_file_path = Path(temp_file_path_str)
+
+        child_env: dict[str, Any] = os.environ.copy()  # pyright: ignore[reportExplicitAny]
+        child_env[RESULT_FILE_ENV_NAME] = temp_file_path.as_posix()
+
+        completed_process = subprocess.run(
+            [script_path_str], shell=True, executable=self.config.shell, env=child_env
+        )
+
+        try:
+            completed_process.check_returncode()
+            with open(temp_file_path, "rb") as f:
+                return_file_content: dict[str, Any] = tomllib.load(f)  # pyright: ignore[reportExplicitAny]
+        except subprocess.CalledProcessError as e:
+            raise CheckInstalledFailed(
+                "Failed to run check_installed script for module "
+                f"'{self.name}' with target '{target}'."
+            ) from e
+        finally:
+            temp_file_path.unlink()
+
+        try:
+            return_file: ReturnFile = ReturnFile.model_validate(return_file_content)
+        except ValidationError as e:
+            raise InvalidReturnFileFormat(
+                "The return file format from the check_installed script of module "
+                f"'{self.name}' with target '{target}' is invalid."
+            ) from e
+
+        return return_file.installed
+
     def install(self, target: str | None = None):
 
         # TODO: check for cyclic dependencies
@@ -175,3 +233,9 @@ class ModuleConfig(BaseModel):
             )
 
         return data["module"]  # pyright: ignore[reportUnknownVariableType]
+
+
+class ReturnFile(BaseModel):
+    """Pydantic model for the file containing output of the check_installed process."""
+
+    installed: bool
