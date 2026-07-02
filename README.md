@@ -42,6 +42,12 @@ dot-vault module install <TARGET>
 
 # TODO
 
+## Next Steps
+
+- What was just implemented: check_installed scripts
+- Implement Tests
+- document it
+
 ## Flavor
 
 - each module can have flavors
