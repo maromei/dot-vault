@@ -136,7 +136,7 @@ class ModuleConfig(BaseModel):
     def clean_description(cls, value: str) -> str:
         """Remove leading whitspace consistent through all lines."""
 
-        match: re.Match[str] | None = re.search(r"^\s*(?=\S)", value)
+        match: re.Match[str] | None = re.search(r"^\s+(?=\S)", value)
         if match is not None:
             string_to_replace = r"(^|\n)?" + match.group()
             value = re.sub(string_to_replace, "\n", value)
