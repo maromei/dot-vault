@@ -24,7 +24,7 @@ def get_dot_vault_dir() -> Path:
         Path to the dot-vault directory.
     """
 
-    dotvault_dir: Path = EnvironmentSettings.conf_dir
+    dotvault_dir: Path = EnvironmentSettings().conf_dir
     dotvault_dir = dotvault_dir.resolve()
 
     if not dotvault_dir.is_dir():
