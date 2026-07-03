@@ -8,8 +8,8 @@
     └ <MODULE_NAME>
       ├ module_config.toml
       └ install_scripts
-        ├ `<ENVIRONMENT_1>.sh`
-        └ `<ENVIRONMENT_2>.ps1`
+        ├ `<TARGET_1>.sh`
+        └ `<TARGET_2>.ps1`
 ```
 
 ## Modules
@@ -33,14 +33,42 @@ shell = "/bin/csh"  # defaults to whatever shell the user is currently running d
 ### Install
 
 ```bash
-dot-vault module install <ENVIRONMENT>
+dot-vault module install <TARGET>
 ```
 
-- `<ENVIRONMENT>` will match to the start of the script files.
+- `<TARGET>` will match to the start of the script files.
   The file endings may be omitted.
-- if only one install script exists, `<ENVIRONMENT>` may be omitted.
+- if only one install script exists, `<TARGET>` may be omitted.
+
+## Check installed
+
+- script that checks whether a module is already installed
+
+```bash
+dot-vault module check installed `<TARGET>`
+```
+
+- `<TARGET>` will match to the start of the script files.
+  The file endings may be omitted.
+- if only one install script exists, `<TARGET>` may be omitted.
+
+1. The method searches for the script under
+   `modules/<MODULE_NAME>/check_installed/<TARGET>*`.
+3. Relevant scripts found are executed using the `shell` value in the Modules config file.
+4. It passes the `DOT_VAULT_RESULT_FILE` environment variable
+   containing a path to a temporary TOML file.
+5. The `check_installed` script writes `installed = true` or `installed = false`
+   together with other potential information
+   to that TOML file and exits with `0`. For more info on the
+6. The TOML file is pased for relevant info.
 
 # TODO
+
+## Check installed - flag force update
+
+- provide flag so modules, which are already installed, can be updated
+- only update modules **once**
+  - if module is present as multiple dependencies, do not re run them again
 
 ## Flavor
 
@@ -75,14 +103,20 @@ dot-vault module install <ENVIRONMENT>
   is no 'state'
   - we do not know which flavor is installed
 
-## Check installed
+## Refactor: Move get_module_install_script to path module
 
-- have script to check whether something is installed
-- should also be able to provide a name, similar to the install_scripts (ie `arch.sh`)
-- should be used when installing dependencies
+## Refactor: Make get_module_install_script use the new MoreThanOneFileFound exception
 
-## Check installed - flag force update
+## Refactor: Exception as value using cflow
 
-- provide flag so modules, which are already installed, can be updated
-- only update modules **once**
-  - if module is present as multiple dependencies, do not re run them again
+- f.e. the check_installed workflow has many possible issues
+- currently python error gets raised on cli method when module does not exist
+- i can catch the method, but prefer to returne exception
+
+# Dev environment
+
+- linting via `ruff`
+- typechecking via `basedpyright`
+- task runner using `just`
+- tests via `pytest`
+- all tools listed in dev-dependency section of the `pyproject.toml`

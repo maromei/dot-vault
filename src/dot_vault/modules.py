@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import tomllib
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator, field_validator, ValidationError
 
-from dot_vault.errors import InstallFailed
-from dot_vault.paths import get_module_dir
+from dot_vault.errors import (
+    InstallFailed,
+    CheckInstalledFailed,
+    InvalidReturnFileFormat,
+)
+from dot_vault.paths import get_module_dir, get_check_installed_script
 from dot_vault.shell import get_default_shell
+from dot_vault.constants import RESULT_FILE_ENV_NAME
 
 
 def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
@@ -38,11 +45,11 @@ def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
     raise FileNotFoundError("The path to the module_config.toml could not be found.")
 
 
-def get_module_install_script(module_name: str, install_script: str | None) -> Path:
+def get_module_install_script(module_name: str, target: str | None) -> Path:
     """Get the path to the install script
 
     Searches the following of :func:`get_module_dir``{module_name}/install_scripts/`
-    for the `{install_script}*` file. If `install_script` is `None`, it is assumed to
+    for the `{target}*` file. If `target` is `None`, it is assumed to
     only contain one file whose path will be returned. An error will be raised if
     multiple files are found for the given pattern.
 
@@ -53,8 +60,8 @@ def get_module_install_script(module_name: str, install_script: str | None) -> P
 
     Args:
         module_name: The name of the module.
-        install_script: The name of the install script to use. The given string will
-            be matched to the beginning of the filename. Supports 'glob' syntax.
+        target: The name of the target script/environment to use. The given string
+            will be matched to the beginning of the filename. Supports 'glob' syntax.
 
     Returns:
         The path to the install script to use.
@@ -66,8 +73,8 @@ def get_module_install_script(module_name: str, install_script: str | None) -> P
         raise FileNotFoundError("Install Script directory does not exist.")
 
     pattern: str = "*"
-    if install_script is not None:
-        pattern = f"{install_script}*"
+    if target is not None:
+        pattern = f"{target}*"
 
     matching_files: list[Path] = list(install_script_dir.glob(pattern))
     if len(matching_files) == 0:
@@ -104,14 +111,80 @@ class Module:
         self.name = name
         self.path = module_dir
 
-    def install(self, install_script: str | None = None):
+    def check_installed_toml(self, target: str | None) -> ReturnFile | None:
+        """Check if the module is installed.
 
+        Args:
+            target: target to check for. If `None`, assumes only a single script exists.
+
+        Returns:
+            Toml content of the script if the module is installed,
+            or `None` if no `check_installed` script exists.
+        """
+
+        script_path: Path | None = get_check_installed_script(
+            module_name=self.name, target=target
+        )
+        if script_path is None:
+            return None
+
+        script_path_str: str = script_path.as_posix()
+
+        fd, temp_file_path_str = tempfile.mkstemp(suffix=".toml")
+        os.close(fd)
+        temp_file_path = Path(temp_file_path_str)
+
+        child_env: dict[str, Any] = os.environ.copy()  # pyright: ignore[reportExplicitAny]
+        child_env[RESULT_FILE_ENV_NAME] = temp_file_path.as_posix()
+
+        completed_process = subprocess.run(
+            [script_path_str], shell=True, executable=self.config.shell, env=child_env
+        )
+
+        try:
+            completed_process.check_returncode()
+            with open(temp_file_path, "rb") as f:
+                return_file_content: dict[str, Any] = tomllib.load(f)  # pyright: ignore[reportExplicitAny]
+        except subprocess.CalledProcessError as e:
+            raise CheckInstalledFailed(
+                "Failed to run check_installed script for module "
+                f"'{self.name}' with target '{target}'."
+            ) from e
+        finally:
+            temp_file_path.unlink()
+
+        try:
+            return_file: ReturnFile = ReturnFile.model_validate(return_file_content)
+        except ValidationError as e:
+            raise InvalidReturnFileFormat(
+                "The return file format from the check_installed script of module "
+                f"'{self.name}' with target '{target}' is invalid."
+            ) from e
+
+        return return_file
+
+    def check_installed(self, target: str | None) -> bool | None:
+        """Check if the module is installed.
+
+        Args:
+            target: target to check for. If `None`, assumes only a single script exists.
+
+        Returns:
+            If the module is installed, or `None` if no `check_installed` script exists.
+        """
+
+        return_file: ReturnFile | None = self.check_installed_toml(target)
+        if return_file is None:
+            return None
+        return return_file.installed
+
+    def install(self, target: str | None = None):
         # TODO: check for cyclic dependencies
         for dependency in self.config.dependencies:
             module: Module = get_module(dependency)
-            module.install(install_script=install_script)
+            module.install(target=target)
 
-        install_script_path: Path = get_module_install_script(self.name, install_script)
+        install_script_path: Path = get_module_install_script(self.name, target)
         path_str: str = install_script_path.as_posix()
         completed_process = subprocess.run(
             [path_str],
@@ -175,3 +248,9 @@ class ModuleConfig(BaseModel):
             )
 
         return data["module"]  # pyright: ignore[reportUnknownVariableType]
+
+
+class ReturnFile(BaseModel):
+    """Pydantic model for the file containing output of the check_installed process."""
+
+    installed: bool
