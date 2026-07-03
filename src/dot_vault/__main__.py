@@ -6,13 +6,17 @@ from rich.table import Table
 from rich.panel import Panel
 
 from dot_vault.paths import get_module_dir
-from dot_vault.modules import Module, get_module
+from dot_vault.modules import Module, get_module, ReturnFile
+from dot_vault.pretty_print import print_two_column_table
 
 
 app = typer.DocTyper(help="Manage dot files and system setup.")
 
 module_app = typer.DocTyper(help="Manage modules.")
 app.add_typer(module_app, name="module")
+
+module_check_app = typer.DocTyper(help="Check the status of modules.")
+module_app.add_typer(module_check_app, name="check")
 
 
 @module_app.command(name="install")
@@ -28,6 +32,33 @@ def modules_install(module: str, target: str | None = None):
 
     module_obj: Module = get_module(name=module)
     module_obj.install(target=target)
+
+
+@module_check_app.command(name="installed")
+def modules_check_installed(module: str, target: str | None = None):
+    """Check if a module is installed
+
+    Args:
+        module: Name of the module.
+        target: Target environment (e.g., OS or machine name) to check for. If not
+            specified, it is assumed the module only contains one target script, and
+            that one is used.
+    """
+
+    module_obj: Module = get_module(name=module)
+    toml_content: ReturnFile | None = module_obj.check_installed_toml(target)
+    if toml_content is None:
+        raise typer.BadParameter(
+            f"The target '{target}' was not found for module '{module}'."
+        )
+
+    # since it is a pydantic model where all values need to be serializable,
+    # it is assumed that the `str(v)` function will always result in
+    # valid usable values.
+    table_data: list[tuple[str, str]] = [(k, str(v)) for k, v in toml_content]  # pyright: ignore[reportAny]
+
+    title: str = f"Is {module} installed?"
+    print_two_column_table(table_data = table_data, title = title)
 
 
 @module_app.command(name="list")
