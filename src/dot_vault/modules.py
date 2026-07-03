@@ -111,14 +111,15 @@ class Module:
         self.name = name
         self.path = module_dir
 
-    def check_installed(self, target: str | None) -> bool | None:
+    def check_installed_toml(self, target: str | None) -> ReturnFile | None:
         """Check if the module is installed.
 
         Args:
             target: target to check for. If `None`, assumes only a single script exists.
 
         Returns:
-            If the module is installed, or `None` if no `check_installed` script exists.
+            Toml content of the script if the module is installed,
+            or `None` if no `check_installed` script exists.
         """
 
         script_path: Path | None = get_check_installed_script(
@@ -160,10 +161,24 @@ class Module:
                 f"'{self.name}' with target '{target}' is invalid."
             ) from e
 
+        return return_file
+
+    def check_installed(self, target: str | None) -> bool | None:
+        """Check if the module is installed.
+
+        Args:
+            target: target to check for. If `None`, assumes only a single script exists.
+
+        Returns:
+            If the module is installed, or `None` if no `check_installed` script exists.
+        """
+
+        return_file: ReturnFile | None = self.check_installed_toml(target)
+        if return_file is None:
+            return None
         return return_file.installed
 
     def install(self, target: str | None = None):
-
         # TODO: check for cyclic dependencies
         for dependency in self.config.dependencies:
             module: Module = get_module(dependency)
