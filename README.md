@@ -113,6 +113,8 @@ dot-vault module check installed `<TARGET>`
 - currently python error gets raised on cli method when module does not exist
 - i can catch the method, but prefer to returne exception
 
+## Doc: Graph for toml return of check_installed scripts
+
 # Dev environment
 
 - linting via `ruff`
