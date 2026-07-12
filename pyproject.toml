@@ -19,6 +19,7 @@ package=true
 
 [tool.basedpyright]
 reportImplicitStringConcatenation = false
+reportExplicitAny = false
 extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"

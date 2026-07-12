@@ -103,7 +103,7 @@ class Module:
 
         if module_config_path.is_file():
             with open(module_config_path, "rb") as f:
-                module_config_dict: dict[str, Any] = tomllib.load(f)  # pyright: ignore[reportExplicitAny]
+                module_config_dict: dict[str, Any] = tomllib.load(f)
             self.config = ModuleConfig.model_validate(module_config_dict)
         else:
             self.config = ModuleConfig()
@@ -134,7 +134,7 @@ class Module:
         os.close(fd)
         temp_file_path = Path(temp_file_path_str)
 
-        child_env: dict[str, Any] = os.environ.copy()  # pyright: ignore[reportExplicitAny]
+        child_env: dict[str, Any] = os.environ.copy()
         child_env[RESULT_FILE_ENV_NAME] = temp_file_path.as_posix()
 
         completed_process = subprocess.run(
@@ -144,7 +144,7 @@ class Module:
         try:
             completed_process.check_returncode()
             with open(temp_file_path, "rb") as f:
-                return_file_content: dict[str, Any] = tomllib.load(f)  # pyright: ignore[reportExplicitAny]
+                return_file_content: dict[str, Any] = tomllib.load(f)
         except subprocess.CalledProcessError as e:
             raise CheckInstalledFailed(
                 "Failed to run check_installed script for module "
@@ -219,7 +219,7 @@ class ModuleConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def unwrap_top_category(cls, data: Any) -> Any:  # pyright: ignore[reportExplicitAny, reportAny]
+    def unwrap_top_category(cls, data: Any) -> Any:  # pyright: ignore[reportAny]
         """Removes outer `[dot-vault.module]` category if present.
 
         Ensures that the toml file to be parsed either has no top category, or
