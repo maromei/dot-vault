@@ -18,6 +18,16 @@ dot-vault = "dot_vault.__main__:app"
 [tool.uv]
 package=true
 
+[tool.ruff]
+# Ignoring E701 (multiple statements on one line (colon))
+# to make use of very short match statements in the `cflowpy` library.
+# f.e. the following snippet allows easy returning of an error and unpacking of an
+# optional value:
+#     match optional_value:
+#        case Err(err): return Err(err)
+#        case Ok(value): pass
+ignore = ["E701"]
+
 [tool.basedpyright]
 reportImplicitStringConcatenation = false
 reportExplicitAny = false
