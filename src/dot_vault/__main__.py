@@ -1,7 +1,7 @@
-from pathlib import Path
-
 import doctyper as typer
 
+from cflowpy import Some, Nothing, Ok, Err, Result
+from dot_vault.errors import ModuleDirErrors
 from dot_vault.paths import get_module_dir
 from dot_vault.modules import Module, get_module, ReturnFile
 from dot_vault.pretty_print import print_two_column_table
@@ -27,8 +27,16 @@ def modules_install(module: str, target: str | None = None):
             that one is used.
     """
 
-    module_obj: Module = get_module(name=module)
-    module_obj.install(target=target)
+    target_opt = Some(target) if target is not None else Nothing()
+    match get_module(name=module):
+        case Ok(module_obj):
+            match module_obj.install(target=target_opt):
+                case Ok(_):
+                    pass
+                case Err(err):
+                    raise err
+        case Err(err):
+            raise err
 
 
 @module_check_app.command(name="installed")
@@ -42,38 +50,52 @@ def modules_check_installed(module: str, target: str | None = None):
             that one is used.
     """
 
-    module_obj: Module = get_module(name=module)
-    toml_content: ReturnFile | None = module_obj.check_installed_toml(target)
-    if toml_content is None:
-        raise typer.BadParameter(
-            f"The target '{target}' was not found for module '{module}'."
-        )
+    target_opt = Some(target) if target is not None else Nothing()
+    module_result: Result[Module, ModuleDirErrors] = get_module(name=module)
+    module_obj: Module = module_result.unwrap_or_raise()
+    is_installed_result = module_obj.check_installed_toml(target=target_opt)
+    is_installed_toml: ReturnFile = is_installed_result.unwrap_or_raise()
 
-    # since it is a pydantic model where all values need to be serializable,
-    # it is assumed that the `str(v)` function will always result in
-    # valid usable values.
-    table_data: list[tuple[str, str]] = [(k, str(v)) for k, v in toml_content]  # pyright: ignore[reportAny]
+    table_data_any: list[tuple[str, bool]] = list(
+        is_installed_toml.model_dump().items()
+    )
+    table_data: list[tuple[str, str]] = [(f[0], str(f[1])) for f in table_data_any]
 
-    title: str = f"Is {module} installed?"
-    print_two_column_table(table_data=table_data, title=title)
+    title = f"Is module '{module}' installed?"
+    subtitle = f"Target: '{target_opt.unwrap_or('<NONE>')}'"
+
+    print_two_column_table(table_data=table_data, title=title, subtitle=subtitle)
 
 
 @module_app.command(name="list")
 def modules_list():
     """List all available modules."""
 
-    module_dir: Path = get_module_dir()
-    module_names: list[str] = [d.name for d in module_dir.iterdir() if d.is_dir()]
-    modules: list[Module] = [get_module(name) for name in module_names]
+    match get_module_dir():
+        case Ok(module_dir):
+            module_names: list[str] = [
+                d.name for d in module_dir.iterdir() if d.is_dir()
+            ]
+            modules: list[Module] = []
+            for name in module_names:
+                match get_module(name):
+                    case Ok(module):
+                        modules.append(module)
+                    case Err(err):
+                        raise err
 
-    table_data: list[tuple[str, str]] = [
-        (module.name, module.config.description) for module in modules
-    ]
+            table_data: list[tuple[str, str]] = [
+                (module.name, module.config.description) for module in modules
+            ]
 
-    title = "Available Modules"
-    subtitle: str = module_dir.as_posix()
+            title = "Available Modules"
+            subtitle: str = module_dir.as_posix()
 
-    print_two_column_table(table_data=table_data, title=title, subtitle=subtitle)
+            print_two_column_table(
+                table_data=table_data, title=title, subtitle=subtitle
+            )
+        case Err(err):
+            raise err
 
 
 if __name__ == "__main__":

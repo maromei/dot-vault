@@ -3,91 +3,113 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import logging
 import tomllib
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 from pydantic import BaseModel, Field, model_validator, field_validator, ValidationError
 
+from cflowpy import Option, Some, Result, Ok, Err, nothing, is_err
 from dot_vault.errors import (
+    ModuleDirErrors,
+    GetScriptErrors,
     InstallFailed,
-    CheckInstalledFailed,
+    CheckInstallFailed,
     InvalidReturnFileFormat,
+    ModuleConfigDoesNotExist,
+    ScriptRunFailed,
 )
-from dot_vault.paths import get_module_dir, get_check_installed_script
+from dot_vault.paths import (
+    get_module_dir,
+    get_module_install_script,
+    get_check_installed_script,
+)
 from dot_vault.shell import get_default_shell
 from dot_vault.constants import RESULT_FILE_ENV_NAME
 
 
-def get_module_config_path(module_name: str, not_exist_ok: bool = True) -> Path:
+LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+@overload
+def get_module_config_path(
+    module_name: str, not_exist_ok: Literal[True] = True
+) -> Result[Path, ModuleDirErrors]: ...
+
+
+@overload
+def get_module_config_path(
+    module_name: str, not_exist_ok: Literal[False]
+) -> Result[Path, ModuleDirErrors | ModuleConfigDoesNotExist]: ...
+
+
+def get_module_config_path(
+    module_name: str, not_exist_ok: bool = True
+) -> (
+    Result[Path, ModuleDirErrors]
+    | Result[Path, ModuleDirErrors | ModuleConfigDoesNotExist]
+):
     """Get the path to a modules config file.
 
     Expected path: :func:`get_module_dir``{module_name}/module_config.toml`.
-
-    Raises:
-        FileNotFoundError: If `not_exist_ok = False` and the file does not exist.
 
     Args:
         module_name:
         not_exist_ok: Returns the path to the file, even if it does not exist.
 
     Returns:
-        Path to the module config file.
+        Result containing the Path to the module config file or a relevant error.
     """
 
-    module_dir: Path = get_module_dir(module_name)
-    config_path: Path = module_dir / "module_config.toml"
+    match get_module_dir(Some(module_name)):
+        case Ok(module_dir):
+            config_path: Path = module_dir / "module_config.toml"
 
-    if not_exist_ok or config_path.is_file():
-        return config_path.resolve()
+            if not_exist_ok or config_path.is_file():
+                return Ok(config_path.resolve())
 
-    raise FileNotFoundError("The path to the module_config.toml could not be found.")
+            msg = (
+                "The path to the module_config.toml could not be found: "
+                f"{config_path.as_posix()}"
+            )
+
+            return Err(ModuleConfigDoesNotExist(msg=msg, file_path=config_path))
+        case Err(err):
+            return Err(err)
 
 
-def get_module_install_script(module_name: str, target: str | None) -> Path:
-    """Get the path to the install script
-
-    Searches the following of :func:`get_module_dir``{module_name}/install_scripts/`
-    for the `{target}*` file. If `target` is `None`, it is assumed to
-    only contain one file whose path will be returned. An error will be raised if
-    multiple files are found for the given pattern.
-
-    Raises:
-        FileNotFoundError: :func:`get_module_dir``{module_name}/install_scripts/`
-            directory does not exist, the given install script was not found, or
-            more than one matching install script was found.
+def get_module(
+    name: str,
+) -> Result[Module, ModuleDirErrors]:
+    """Create a :class:`Module` object from the name.
 
     Args:
-        module_name: The name of the module.
-        target: The name of the target script/environment to use. The given string
-            will be matched to the beginning of the filename. Supports 'glob' syntax.
+        name:
 
     Returns:
-        The path to the install script to use.
+        A :class:`Module` object if succesfull. Even if no config file could be
+        found, a default object will be created.
     """
 
-    module_dir: Path = get_module_dir(module_name)
-    install_script_dir: Path = module_dir / "install_scripts"
-    if not install_script_dir.is_dir():
-        raise FileNotFoundError("Install Script directory does not exist.")
+    module_dir_result = get_module_dir(Some(name))
+    match module_dir_result:
+        case Err() as err: return err  # fmt: off
+        case Ok(module_dir): pass  # fmt: off
 
-    pattern: str = "*"
-    if target is not None:
-        pattern = f"{target}*"
+    config_path_result = get_module_config_path(module_name=name, not_exist_ok=True)
+    match config_path_result:
+        case Err() as err: return err  # fmt: off
+        case Ok(module_config_path): pass  # fmt: off
 
-    matching_files: list[Path] = list(install_script_dir.glob(pattern))
-    if len(matching_files) == 0:
-        raise FileNotFoundError("The install script name was not found.")
-
-    if len(matching_files) > 1:
-        raise FileNotFoundError("Found more than 1 relevant install script.")
-
-    return matching_files[0]
-
-
-def get_module(name: str) -> Module:
-    return Module(name)
+    if module_config_path.is_file():
+        with open(module_config_path, "rb") as f:
+            module_config_dict: dict[str, Any] = tomllib.load(f)
+        config = ModuleConfig.model_validate(module_config_dict)
+    else:
+        config = ModuleConfig()
+    return Ok(Module(name, module_dir, config))
 
 
 class Module:
@@ -97,36 +119,41 @@ class Module:
     path: Path
     config: ModuleConfig
 
-    def __init__(self, name: str):
-        module_dir: Path = get_module_dir(name)
-        module_config_path: Path = get_module_config_path(name, not_exist_ok=True)
-
-        if module_config_path.is_file():
-            with open(module_config_path, "rb") as f:
-                module_config_dict: dict[str, Any] = tomllib.load(f)
-            self.config = ModuleConfig.model_validate(module_config_dict)
-        else:
-            self.config = ModuleConfig()
-
+    def __init__(self, name: str, path: Path, config: ModuleConfig):
         self.name = name
-        self.path = module_dir
+        self.path = path
+        self.config = config
 
-    def check_installed_toml(self, target: str | None) -> ReturnFile | None:
+    def check_installed_toml(
+        self,
+        target: Option[str] = nothing,
+    ) -> Result[ReturnFile, CheckInstallFailed]:
         """Check if the module is installed.
 
         Args:
-            target: target to check for. If `None`, assumes only a single script exists.
+            target: target to check for.
+            If `Nothing`, assumes only a single script exists.
 
         Returns:
-            Toml content of the script if the module is installed,
-            or `None` if no `check_installed` script exists.
+            Result containing Option[ReturnFile], or error.
         """
 
-        script_path: Path | None = get_check_installed_script(
+        script_result: Result[Path, GetScriptErrors] = get_check_installed_script(
             module_name=self.name, target=target
         )
-        if script_path is None:
-            return None
+
+        match script_result:
+            case Err(err):
+                target_str = target.unwrap_or("<NONE>")
+                msg = (
+                    f"Failed to check whether the module '{self.name}' is installed. "
+                    f"(target: '{target_str}')"
+                )
+                return_err = CheckInstallFailed(msg=msg, source=err)
+                LOGGER.error(msg, exc_info=return_err)
+                return Err(return_err)
+            case Ok(script_path):
+                pass
 
         script_path_str: str = script_path.as_posix()
 
@@ -138,7 +165,10 @@ class Module:
         child_env[RESULT_FILE_ENV_NAME] = temp_file_path.as_posix()
 
         completed_process = subprocess.run(
-            [script_path_str], shell=True, executable=self.config.shell, env=child_env
+            [script_path_str],
+            shell=True,
+            executable=self.config.shell,
+            env=child_env,
         )
 
         try:
@@ -146,45 +176,82 @@ class Module:
             with open(temp_file_path, "rb") as f:
                 return_file_content: dict[str, Any] = tomllib.load(f)
         except subprocess.CalledProcessError as e:
-            raise CheckInstalledFailed(
-                "Failed to run check_installed script for module "
-                f"'{self.name}' with target '{target}'."
-            ) from e
+            target_str = target.unwrap_or("<NONE>")
+            msg = (
+                f"Failed to run check_installed script for module '{self.name}' "
+                f"with target '{target_str}'."
+            )
+            run_error = ScriptRunFailed(msg=msg, source=e)
+            return_error = CheckInstallFailed(msg=msg, source=run_error)
+            LOGGER.error(msg, exc_info=return_error)
+            return Err(return_error)
         finally:
             temp_file_path.unlink()
 
         try:
             return_file: ReturnFile = ReturnFile.model_validate(return_file_content)
         except ValidationError as e:
-            raise InvalidReturnFileFormat(
+            target_str = target.unwrap_or("<NONE>")
+            msg = (
                 "The return file format from the check_installed script of module "
-                f"'{self.name}' with target '{target}' is invalid."
-            ) from e
+                f"'{self.name}' with target '{target_str}' is invalid."
+            )
+            format_error = InvalidReturnFileFormat(msg=msg, source=e)
+            return_error = CheckInstallFailed(msg=msg, source=format_error)
+            LOGGER.error(msg, exc_info=return_error)
+            return Err(return_error)
 
-        return return_file
+        return Ok(return_file)
 
-    def check_installed(self, target: str | None) -> bool | None:
+    def check_installed(
+        self, target: Option[str] = nothing
+    ) -> Result[bool, CheckInstallFailed]:
         """Check if the module is installed.
 
         Args:
-            target: target to check for. If `None`, assumes only a single script exists.
+            target: target to check for.
+                If `Nothing`, assumes only a single script exists.
 
         Returns:
-            If the module is installed, or `None` if no `check_installed` script exists.
+            Result containing Option[bool], or error.
         """
 
-        return_file: ReturnFile | None = self.check_installed_toml(target)
-        if return_file is None:
-            return None
-        return return_file.installed
+        match self.check_installed_toml(target):
+            case Ok(file):
+                return Ok(file.installed)
+            case err:
+                return err
 
-    def install(self, target: str | None = None):
+    def install(
+        self,
+        target: Option[str] = nothing,
+    ) -> Result[None, InstallFailed]:
         # TODO: check for cyclic dependencies
         for dependency in self.config.dependencies:
-            module: Module = get_module(dependency)
-            module.install(target=target)
+            match get_module(dependency):
+                case Err(err):
+                    msg = (
+                        f"Unable to install the module '{dependency}' as a "
+                        f"dependency of '{self.name}'."
+                    )
+                    return Err(InstallFailed(msg=msg, source=err))
+                case Ok(module): pass  # fmt: off
 
-        install_script_path: Path = get_module_install_script(self.name, target)
+            install_result = module.install(target=target)
+            if is_err(install_result):
+                return install_result
+
+        match get_module_install_script(self.name, target):
+            case Err(err):
+                target_str = target.unwrap_or("<NONE>")
+                msg = (
+                    f"Failed getting install script for module '{self.name}'"
+                    f" with target '{target_str}'."
+                )
+                return Err(InstallFailed(msg=msg, source=err))
+
+            case Ok(install_script_path): pass  # fmt: off
+
         path_str: str = install_script_path.as_posix()
         completed_process = subprocess.run(
             [path_str],
@@ -194,7 +261,17 @@ class Module:
         try:
             completed_process.check_returncode()
         except subprocess.CalledProcessError as e:
-            raise InstallFailed(f"Unable to install the module '{self.name}'") from e
+            target_str = target.unwrap_or("<NONE>")
+            msg = (
+                f"Install script failed for module '{self.name}'"
+                f" with target '{target_str}'."
+            )
+            script_err = ScriptRunFailed(msg=msg, source=e)
+            err = InstallFailed(
+                f"Unable to install the module '{self.name}'", source=script_err
+            )
+            return Err(err)
+        return Ok(None)
 
 
 class ModuleConfig(BaseModel):
