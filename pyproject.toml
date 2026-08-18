@@ -18,7 +18,7 @@ dot-vault = "dot_vault.__main__:app"
 [tool.uv]
 package=true
 
-[tool.ruff]
+[tool.ruff.lint]
 # Ignoring E701 (multiple statements on one line (colon))
 # to make use of very short match statements in the `cflowpy` library.
 # f.e. the following snippet allows easy returning of an error and unpacking of an
