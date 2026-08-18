@@ -108,8 +108,6 @@ dot-vault module check installed `<TARGET>`
   is no 'state'
   - we do not know which flavor is installed
 
-## Refactor: Move get_module_install_script to path module
-
 ## Refactor: Make get_module_install_script use the new MoreThanOneFileFound exception
 
 ## Refactor: Exception as value using cflow
