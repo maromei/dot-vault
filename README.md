@@ -64,6 +64,11 @@ dot-vault module check installed `<TARGET>`
 
 # TODO
 
+## Do not install when check install is true
+
+- currently on installing: every install script is run, regardless of whether the
+  module is already installed. --> check first, and skip if already true
+
 ## Check installed - flag force update
 
 - provide flag so modules, which are already installed, can be updated
